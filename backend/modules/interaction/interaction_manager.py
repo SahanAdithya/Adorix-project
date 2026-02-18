@@ -1,7 +1,7 @@
 import time
-from tts_engine import speak
-from stt_engine import listen_one_phrase
-from brain_engine import get_answer_for_product
+from .tts_engine import speak
+from .stt_engine import listen_one_phrase
+from .brain_engine import get_answer_for_product
 
 def start_interaction_loop(current_ad_name):
     """

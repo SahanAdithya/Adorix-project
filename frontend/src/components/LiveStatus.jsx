@@ -1,45 +1,69 @@
 import React from 'react';
 
-// Added 'personCount' prop to show how many faces are detected
-export default function LiveStatus({ isConnected = true, personCount = 0 }) {
+export default function LiveStatus({ isConnected, personCount, adsPlaying = false, cameraCapturing = false }) {
+  // Determine status color based on connection and detection
+  const statusColor = isConnected ? "bg-green-500" : "bg-red-500";
+  const glowEffect = isConnected ? "shadow-[0_0_15px_rgba(34,197,94,0.6)]" : "";
+
   return (
-    // Tailwind: Fixed top-right, flexbox layout, blur effect
-    <div className="absolute top-6 right-6 z-50 flex flex-col items-end gap-2">
+    <div className="absolute top-8 right-8 z-50 flex flex-col items-end gap-2">
+
+      {/* TOP-RIGHT AD PLAYBACK DOT (fixed to screen) */}
+      {adsPlaying && (
+        <div className="fixed top-3 right-3 z-60">
+          <div className="relative h-4 w-4">
+            <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-green-300 opacity-80"></span>
+            <span className="relative inline-flex rounded-full h-4 w-4 bg-green-400 border border-white/30"></span>
+          </div>
+        </div>
+      )}
+
+      {/* CAMERA RECORDING INDICATOR (Center bottom when capturing) */}
+      {cameraCapturing && (
+        <div className="fixed bottom-1/2 left-1/2 transform -translate-x-1/2 translate-y-1/2 z-60">
+          <div className="flex items-center gap-3 px-8 py-4 rounded-lg bg-red-600/90 backdrop-blur-md border-2 border-red-400 shadow-lg shadow-red-600/50 animate-pulse">
+            {/* Red recording dot */}
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-3 w-3 rounded-full bg-red-300 animate-pulse"></span>
+              <span className="text-white font-bold text-lg tracking-widest uppercase">
+                CAMERA RECORDING
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
       
-      {/* 1. MAIN BADGE (Connection Status) */}
-      <div className={`flex items-center gap-3 px-4 py-2 rounded-full border backdrop-blur-md transition-all duration-300 ${
-        isConnected 
-          ? 'bg-black/60 border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.2)]' 
-          : 'bg-red-900/40 border-red-500/30'
-      }`}>
+      {/* 1. MAIN SYSTEM STATUS BADGE */}
+      <div className={`flex items-center gap-3 px-5 py-2 rounded-full border border-white/10 bg-black/40 backdrop-blur-md transition-all duration-500 ${glowEffect}`}>
         
-        {/* Pulsing Dot */}
+        {/* Pulsing Indicator Dot */}
         <div className="relative flex h-3 w-3">
           {isConnected && (
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
           )}
-          <span className={`relative inline-flex rounded-full h-3 w-3 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+          <span className={`relative inline-flex rounded-full h-3 w-3 ${statusColor}`}></span>
         </div>
 
-        {/* Text */}
-        <span className="text-white text-xs font-bold tracking-widest">
-          {isConnected ? 'SYSTEM LIVE' : 'OFFLINE'}
+        <span className="text-white font-mono text-xs font-bold tracking-widest uppercase">
+          {isConnected ? "SYSTEM ONLINE" : "DISCONNECTED"}
         </span>
       </div>
 
-      {/* 2. DETECTION BADGE (Only shows when someone is detected) */}
-      {isConnected && personCount > 0 && (
-        <div className="flex items-center gap-2 px-3 py-1 bg-green-500/20 backdrop-blur-sm rounded-lg border border-green-500/30 animate-in fade-in slide-in-from-top-2 duration-300">
-           {/* Icon: Face/Person Symbol */}
-           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-green-400">
-             <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
-           </svg>
-           
-           <span className="text-green-100 text-[10px] font-mono font-bold uppercase">
-             {personCount} {personCount === 1 ? 'Person' : 'People'} Detected
-           </span>
-        </div>
-      )}
+      {/* 2. PERSON DETECTION BADGE (Only appears when people are seen) */}
+      <div className={`
+        flex items-center gap-2 px-4 py-2 rounded-lg border border-green-500/30 bg-green-900/20 backdrop-blur-md
+        transition-all duration-500 transform origin-top-right
+        ${personCount > 0 ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 -translate-y-2 pointer-events-none"}
+      `}>
+        {/* Icon */}
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+
+        <span className="text-green-100 font-mono text-sm font-bold">
+          {personCount} {personCount === 1 ? "PERSON" : "PEOPLE"} DETECTED
+        </span>
+      </div>
 
     </div>
   );

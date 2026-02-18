@@ -21,6 +21,7 @@ if modules_dir not in sys.path:
 from wake_word import WakeWordService
 from interaction.interaction_manager import start_interaction_loop
 from interaction.tts_engine import speak
+from vision.detector import AgeGenderDetector
 
 # --- Global System State ---
 system_state = {
@@ -36,7 +37,9 @@ system_state = {
 
 connected_clients = []
 wake_word_service = None
+age_gender_detector = None
 main_loop = None # Added to capture the event loop from the main thread
+last_person_count = 0
 
 async def broadcast_state():
     state_payload = json.dumps(system_state)
@@ -100,20 +103,78 @@ def handle_interaction():
         system_state["subtitle"] = ""
         sync_broadcast()
 
+def vision_loop():
+    """Background thread that runs the detector and sends person count updates"""
+    global age_gender_detector, last_person_count, main_loop
+    try:
+        print(">>> [Vision] Starting camera detection loop...")
+        age_gender_detector.start(index=0, width=640, height=480)
+        
+        while True:
+            time.sleep(0.1)  # Light polling
+            
+            # Get current person count from detector state
+            person_count = len(age_gender_detector.tracks)
+            
+            # Only broadcast if count changed
+            if person_count != last_person_count:
+                last_person_count = person_count
+                print(f">>> [Vision] People detected: {person_count}")
+                
+                # Send PERSON_DETECTED action
+                if main_loop:
+                    payload = json.dumps({
+                        "action": "PERSON_DETECTED",
+                        "count": person_count
+                    })
+                    asyncio.run_coroutine_threadsafe(
+                        broadcast_payload(payload), main_loop
+                    )
+    except Exception as e:
+        print(f"!!! [Vision] Error in detection loop: {e}")
+    finally:
+        if age_gender_detector:
+            age_gender_detector.stop()
+
+async def broadcast_payload(payload_str):
+    """Broadcast a specific payload to all connected clients"""
+    if not connected_clients:
+        return
+    tasks = [client.send_text(payload_str) for client in connected_clients]
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global wake_word_service, main_loop
+    global wake_word_service, age_gender_detector, main_loop
     # Capture the main event loop
     main_loop = asyncio.get_running_loop()
     
+    # Initialize vision/camera detector
+    try:
+        print(">>> [Vision] Initializing AgeGenderDetector...")
+        age_gender_detector = AgeGenderDetector()
+        threading.Thread(target=vision_loop, daemon=True).start()
+        print("✅ [Vision] Camera initialized and running")
+    except Exception as e:
+        print(f"⚠️  [Vision] Could not initialize camera: {e}")
+    
     # Initialize wake word
-    wake_word_service = WakeWordService(callback_function=on_wake_word)
-    threading.Thread(target=wake_word_service.start, daemon=True).start()
-    print(">>> [System] Adorix Assistant Ready (Wake Word Active)")
+    try:
+        wake_word_service = WakeWordService(callback_function=on_wake_word)
+        threading.Thread(target=wake_word_service.start, daemon=True).start()
+        print(">>> [System] Adorix Assistant Ready (Wake Word Active)")
+    except Exception as e:
+        print(f"⚠️  [Wake Word] Could not initialize: {e} (Continuing without wake word...)")
     yield
     # Cleanup
     if wake_word_service:
-        wake_word_service.stop()
+        try:
+            wake_word_service.stop()
+        except:
+            pass
+    if age_gender_detector:
+        age_gender_detector.stop()
 
 app = FastAPI(lifespan=lifespan)
 

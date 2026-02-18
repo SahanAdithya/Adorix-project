@@ -1,83 +1,71 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef } from "react";
+import LiveStatus from "./components/LiveStatus"; 
 import LoopView from "./views/LoopView";
-import PersonalizedView from "./views/PersonalizedView";
-import InteractionView from "./views/InteractionView";
+// ... import other views
 
 export default function App() {
-  // 1. Define your playlist based on your folder filenames
-  const playlist = [
-    "ads/10-15_female.mp4",
-    "ads/10-15_male.mp4",
-    "ads/16-29_female.mp4",
-    "ads/16-29_male.mp4",
-    "ads/30-39_female.mp4",
-    "ads/30-39_male.mp4",
-    "ads/40-49_female.mp4",
-    "ads/40-49_male.mp4",
-    "ads/50-59_female.mp4",
-    "ads/50-59_male.mp4",
-    "ads/above-60_female.mp4",
-    "ads/above-60_male.mp4"
-  ];
-
-  const [adIndex, setAdIndex] = useState(0);
-  const [systemState, setSystemState] = useState({
-    mode: "PERSONALIZED",
-    avatar_state: "SLEEP",
-    subtitle: "",
-    ad: playlist[0], // Start with the first ad
-  });
-
+  const [personCount, setPersonCount] = useState(0); // State for the Live Header
+  const [adsPlaying, setAdsPlaying] = useState(false);
+  const [cameraCapturing, setCameraCapturing] = useState(false); // Camera capture status
+  const [isConnected, setIsConnected] = useState(false);
   const ws = useRef(null);
 
-  // 2. Function to switch to the next ad
-  const playNextAd = () => {
-    setAdIndex((prevIndex) => {
-      const nextIndex = (prevIndex + 1) % playlist.length;
-      setSystemState((prev) => ({ ...prev, ad: playlist[nextIndex] }));
-      return nextIndex;
-    });
-  };
-
   useEffect(() => {
+    // Connect to the Python Backend
     const WS_URL = "ws://localhost:8000/ws";
+    
     const connectWS = () => {
       ws.current = new WebSocket(WS_URL);
+
+      ws.current.onopen = () => {
+        console.log("✅ Connected to Vision System");
+        setIsConnected(true);
+      };
+
       ws.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.action === "MODE_SWITCH") {
-            setSystemState((prev) => ({ ...prev, mode: data.mode, ad: data.ad }));
+          
+          // HANDLE FACE DETECTION UPDATE
+          if (data.action === "PERSON_DETECTED") {
+            setPersonCount(data.count);
+            // Camera is capturing when detecting people during ads
+            setCameraCapturing(adsPlaying && data.count > 0);
           }
-          // ... rest of your WS logic
+          
+          // ... handle other actions (MODE_SWITCH, etc.)
         } catch (err) {
-          console.error("Failed to parse WS message", err);
+          console.error("Data Error:", err);
         }
       };
+
+      ws.current.onclose = () => {
+        setIsConnected(false);
+        setTimeout(connectWS, 3000); // Try to reconnect every 3s
+      };
     };
+
     connectWS();
     return () => ws.current?.close();
   }, []);
 
-  const isConnected = useMemo(
-    () => !!ws.current && ws.current.readyState === 1,
-    [systemState.mode, systemState.ad]
-  );
-
-  const adSrc = typeof systemState.ad === "string"
-    ? systemState.ad.startsWith("/") ? systemState.ad : `/${systemState.ad}`
-    : null;
-
-  if (systemState.mode === "PERSONALIZED") {
-    return (
-      <PersonalizedView
-        systemState={{ ...systemState, ad: adSrc }}
-        isConnected={isConnected}
-        onAdEnd={playNextAd} // 3. Pass the callback function
+  return (
+    <div className="relative w-screen h-screen bg-black overflow-hidden font-sans">
+      
+      {/* --- LIVE HEADER (Always on top) --- */}
+      <LiveStatus 
+        isConnected={isConnected} 
+        personCount={personCount} 
+        adsPlaying={adsPlaying}
+        cameraCapturing={cameraCapturing}
       />
-    );
-  }
 
-  // ... rest of your route logic
-  return <LoopView systemState={systemState} isConnected={isConnected} />;
+      {/* --- MAIN VIEWS --- */}
+      <div className="absolute inset-0 z-0">
+         <LoopView systemState={{}} onPlaybackChange={setAdsPlaying} /> 
+         {/* You will add your logic here to switch views later */}
+      </div>
+
+    </div>
+  );
 }
